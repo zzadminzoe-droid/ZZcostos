@@ -7,8 +7,9 @@ export async function middleware(request: NextRequest) {
   const isPublic = pathname.startsWith('/login') || pathname.startsWith('/auth')
 
   // Detectar si hay sesión de Supabase en las cookies
+  // @supabase/ssr v0.10+ usa nombres como sb-xxx-auth-token o sb-xxx-auth-token.0
   const hasSession = request.cookies.getAll().some(
-    c => c.name.startsWith('sb-') && c.name.endsWith('-auth-token')
+    c => c.name.startsWith('sb-') && c.name.includes('-auth-token')
   )
 
   if (isPublic) {

@@ -1,36 +1,64 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ZZ Percusión — Sistema de Gestión de Costos
 
-## Getting Started
+App web para gestión de costos, precios e insumos de ZZ Percusión.
 
-First, run the development server:
+## Stack
 
+- **Frontend**: Next.js 14 (App Router) + TypeScript + Tailwind CSS
+- **Backend**: Supabase (PostgreSQL + Auth + RLS)
+- **Deploy**: Vercel
+
+---
+
+## Setup inicial
+
+### 1. Instalar dependencias
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Configurar variables de entorno
+```bash
+cp .env.local.example .env.local
+# Editar .env.local con las credenciales de Supabase
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 3. Crear proyecto en Supabase
+1. Ir a [supabase.com](https://supabase.com) → New project
+2. Copiar URL y anon key en `.env.local`
+3. Copiar también la service role key (para migración)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 4. Ejecutar el schema
+En el SQL Editor de Supabase, pegar y ejecutar `supabase/schema.sql`
 
-## Learn More
+### 5. Crear usuario inicial
+En Supabase: **Authentication → Users → Add user**
+- Email: `zoe.atelierfuerza@gmail.com`
 
-To learn more about Next.js, take a look at the following resources:
+### 6. Migrar datos desde Excel
+```bash
+npm run migrate ./COSTOS_ZZ_VFINAL.xlsx
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 7. Correr en desarrollo
+```bash
+npm run dev
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Estructura
+```
+app/(app)/     — Rutas protegidas
+  insumos/     — Insumos y precios calculados
+  productos/   — Productos + BOM editable
+  costos/      — Lista de costos + PDF
+  precios/     — Lista de precios para clientes
+  alertas/     — Alertas + historial de cambios
+app/login/     — Autenticación
+components/    — UI, layout, insumos, productos, exports
+lib/           — Supabase, cálculos, utils
+scripts/       — Migración Excel
+supabase/      — Schema SQL completo
+types/         — Tipos TypeScript
+```

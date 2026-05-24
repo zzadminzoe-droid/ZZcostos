@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { LogOut, User } from 'lucide-react'
 import { clsx } from 'clsx'
 import { getSupabaseBrowser } from '@/lib/supabase'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 const TABS = [
   { href: '/insumos',   label: 'Insumos' },
@@ -16,14 +16,23 @@ const TABS = [
 ]
 
 interface NavbarProps {
-  userName?: string
   alertCount?: number
 }
 
-export function Navbar({ userName = 'Usuario', alertCount = 0 }: NavbarProps) {
+export function Navbar({ alertCount = 0 }: NavbarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const [loggingOut, setLoggingOut] = useState(false)
+  const [userName, setUserName] = useState('Usuario')
+
+  useEffect(() => {
+    const supabase = getSupabaseBrowser()
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user?.email) {
+        setUserName(data.user.email.split('@')[0])
+      }
+    })
+  }, [])
 
   async function handleLogout() {
     setLoggingOut(true)

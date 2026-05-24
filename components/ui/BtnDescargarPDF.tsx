@@ -34,11 +34,27 @@ export function BtnDescargarPDF({ label = 'PDF', filename, buildDocument, classN
         import('file-saver'),
         buildDocument(),
       ])
-      const blob = await pdf(doc).toBlob()
+
+      // React 18's reconciler schedules updateContainer async — we must wait
+      // for the 'change' event (fired on commit) before calling toBlob().
+      // This mirrors how usePDF hook works internally.
+      const instance = pdf()
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        instance.on('change', async () => {
+          try {
+            resolve(await instance.toBlob())
+          } catch (e) {
+            reject(e)
+          }
+        })
+        instance.updateContainer(doc)
+      })
+
       saveAs(blob, filename)
     } catch (err) {
       console.error('Error generando PDF:', err)
-      toast.error('No se pudo generar el PDF')
+      const msg = err instanceof Error ? err.message : String(err)
+      toast.error(`PDF error: ${msg.slice(0, 120)}`, { duration: 8000 })
     } finally {
       setLoading(false)
     }

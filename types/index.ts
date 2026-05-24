@@ -29,35 +29,21 @@ export interface Insumo {
 
 export type TipoFormula = 'casco' | 'fleje' | 'caño' | 'chapa' | 'fundicion'
 
-export interface FormulaParams {
-  tipo: TipoFormula
-  params: CascoParams | FlejeParams | CañoParams | ChapaParams | FundicionParams
-}
+// ── Formato plano (almacenado en JSONB) ──────────────────────
+// Cada tipo discrimina por `tipo` y tiene sus campos directamente
+export type FormulaParams =
+  | { tipo: 'casco';    alto_mm: number;   largo_mm: number; largo_barra_mm?: number }
+  | { tipo: 'fleje';   largo_mm: number;  largo_barra_mm?: number }
+  | { tipo: 'caño';    largo_mm: number;  largo_barra_mm?: number }
+  | { tipo: 'chapa';   largo_mm: number;  alto_mm: number; cromado: boolean }
+  | { tipo: 'fundicion'; peso_g: number;  cromado: boolean }
 
-export interface CascoParams {
-  alto_mm: number
-  largo_mm: number
-}
-
-export interface FlejeParams {
-  largo_corte_mm: number
-}
-
-export interface CañoParams {
-  largo_corte_mm: number
-  largo_barra_mm: number
-}
-
-export interface ChapaParams {
-  largo_mm: number
-  alto_mm: number
-  tiene_cromado: boolean
-}
-
-export interface FundicionParams {
-  peso_gramos: number
-  tiene_cromado: boolean
-}
+// ── Tipos de params para las funciones de cálculo (sin cambios) ──
+export interface CascoParams   { alto_mm: number; largo_mm: number }
+export interface FlejeParams   { largo_corte_mm: number }
+export interface CañoParams    { largo_corte_mm: number; largo_barra_mm: number }
+export interface ChapaParams   { largo_mm: number; alto_mm: number; tiene_cromado: boolean }
+export interface FundicionParams { peso_gramos: number; tiene_cromado: boolean }
 
 export interface HistorialPrecio {
   id: string

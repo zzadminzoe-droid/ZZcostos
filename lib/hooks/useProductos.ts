@@ -54,6 +54,58 @@ export function useBomItems(productoId: string) {
   })
 }
 
+/** Productos con costos calculados en cliente desde bom_items + insumos */
+export function useProductosConCostos() {
+  const sb = getSupabaseBrowser() as any
+  return useQuery({
+    queryKey: ['productos-costos'],
+    queryFn: async () => {
+      const { data, error } = await sb
+        .from('productos')
+        .select('*, familia:familias(id, nombre, orden), bom_items(cantidad, insumo:insumos(precio_sin_iva, precio_con_iva))')
+        .order('codigo')
+      if (error) throw error
+
+      return (data as any[]).map(p => {
+        const items: any[] = p.bom_items ?? []
+        let costoSinIva = 0
+        let itemsSinPrecio = 0
+
+        for (const item of items) {
+          const precio = item.insumo?.precio_sin_iva ?? 0
+          if (precio === 0) itemsSinPrecio++
+          costoSinIva += precio * item.cantidad
+        }
+
+        return {
+          ...(p as Producto),
+          costo_sin_iva: costoSinIva,
+          costo_con_iva: costoSinIva * 1.21,
+          total_bom_items: items.length,
+          items_sin_precio: itemsSinPrecio,
+        }
+      })
+    },
+  })
+}
+
+export function useProductoByCodigo(codigo: string) {
+  const sb = getSupabaseBrowser() as any
+  return useQuery({
+    queryKey: ['producto-codigo', codigo],
+    queryFn: async () => {
+      const { data, error } = await sb
+        .from('productos')
+        .select('*, familia:familias(id, nombre, orden)')
+        .eq('codigo', codigo)
+        .single()
+      if (error) throw error
+      return data as Producto
+    },
+    enabled: !!codigo,
+  })
+}
+
 export function useFamilias() {
   const sb = getSupabaseBrowser() as any
   return useQuery({

@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { Save, Loader2, Info } from 'lucide-react'
-import { useInsumos, useUpdatePrecioInsumo } from '@/lib/hooks/useInsumos'
+import { useInsumos, useUpdatePrecioInsumo, useUpdateInsumoFields } from '@/lib/hooks/useInsumos'
 import { calcularPrecioFundicion } from '@/lib/precios-calculados'
 import { formatPeso } from '@/lib/calculos'
 import { PageSpinner } from '@/components/ui/Spinner'
@@ -11,27 +11,44 @@ import toast from 'react-hot-toast'
 export function PreciosFundicion() {
   const { data: insumos, isLoading } = useInsumos()
   const updatePrecio = useUpdatePrecioInsumo()
+  const updateFields = useUpdateInsumoFields()
 
   const [precioPorGramo, setPrecioPorGramo] = useState('20')
   const [precioCromado, setPrecioCromado] = useState('34.98')
+  const [pesosPorId, setPesosPorId] = useState<Record<string, string>>({})
+  const [cromadoPorId, setCromadoPorId] = useState<Record<string, boolean>>({})
   const [saving, setSaving] = useState(false)
 
-  // Insumos de fundición (categoría FUNDICION ALUMINIO, código empieza con 3.)
+  // Mostrar TODAS las piezas de fundición (código 3.x), con o sin formula_params
   const piezas = useMemo(() => {
     if (!insumos) return []
     return insumos
-      .filter(i => i.codigo.startsWith('3.') && (i.formula_params || i.tipo_precio === 'calculado'))
+      .filter(i => i.codigo.startsWith('3.'))
       .sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, { numeric: true }))
   }, [insumos])
 
   const precioPorGramoNum = parseFloat(precioPorGramo) || 0
   const precioCromadoNum = parseFloat(precioCromado) || 0
 
-  function calcularNuevo(pieza: typeof piezas[0]) {
-    const params = pieza.formula_params?.params as any
-    if (!params?.peso_gramos) return null
+  function getPesoG(pieza: typeof piezas[0]): number {
+    if (pesosPorId[pieza.id] !== undefined) return parseFloat(pesosPorId[pieza.id]) || 0
+    const fp = pieza.formula_params
+    if (fp?.tipo === 'fundicion') return fp.peso_g
+    return 0
+  }
+
+  function getCromado(pieza: typeof piezas[0]): boolean {
+    if (cromadoPorId[pieza.id] !== undefined) return cromadoPorId[pieza.id]
+    const fp = pieza.formula_params
+    if (fp?.tipo === 'fundicion') return fp.cromado
+    return false
+  }
+
+  function calcularNuevo(pieza: typeof piezas[0]): number | null {
+    const peso = getPesoG(pieza)
+    if (!peso) return null
     return calcularPrecioFundicion(
-      { peso_gramos: params.peso_gramos, tiene_cromado: params.tiene_cromado ?? false },
+      { peso_gramos: peso, tiene_cromado: getCromado(pieza) },
       precioPorGramoNum,
       precioCromadoNum
     )
@@ -42,12 +59,31 @@ export function PreciosFundicion() {
     try {
       let actualizados = 0
       for (const pieza of piezas) {
+        const peso = getPesoG(pieza)
+        const cromado = getCromado(pieza)
         const nuevo = calcularNuevo(pieza)
-        if (nuevo !== null) {
-          await updatePrecio.mutateAsync({ id: pieza.id, precio: nuevo })
-          actualizados++
+
+        // Si hay un peso editado o formula_params tiene dato → guardar
+        const hasLocalEdit = pesosPorId[pieza.id] !== undefined || cromadoPorId[pieza.id] !== undefined
+        if (hasLocalEdit || peso > 0) {
+          // Actualizar formula_params en DB si el valor cambió
+          if (hasLocalEdit) {
+            await updateFields.mutateAsync({
+              id: pieza.id,
+              tipo_precio: 'calculado',
+              formula_params: { tipo: 'fundicion', peso_g: peso, cromado },
+            })
+          }
+          // Actualizar precio
+          if (nuevo !== null) {
+            await updatePrecio.mutateAsync({ id: pieza.id, precio: nuevo })
+            actualizados++
+          }
         }
       }
+      // Limpiar edits locales
+      setPesosPorId({})
+      setCromadoPorId({})
       toast.success(`${actualizados} piezas actualizadas`)
     } finally {
       setSaving(false)
@@ -55,6 +91,9 @@ export function PreciosFundicion() {
   }
 
   if (isLoading) return <PageSpinner />
+
+  const conPeso = piezas.filter(p => getPesoG(p) > 0).length
+  const sinPeso = piezas.length - conPeso
 
   return (
     <div className="space-y-6">
@@ -77,7 +116,7 @@ export function PreciosFundicion() {
             <button onClick={handleGuardar} disabled={saving || piezas.length === 0}
               className="btn-primary">
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-              Guardar y recalcular ({piezas.length} piezas)
+              Guardar y recalcular ({conPeso} con peso)
             </button>
           </div>
         </div>
@@ -85,6 +124,11 @@ export function PreciosFundicion() {
           <Info size={11} />
           Fórmula: peso_g × precio_fundicion + (cromado ? peso_g × precio_cromado : 0)
         </p>
+        {sinPeso > 0 && (
+          <p className="mt-2 text-xs text-yellow-600">
+            ⚠️ {sinPeso} pieza{sinPeso > 1 ? 's' : ''} sin peso — completá el campo &quot;g&quot; para calcular
+          </p>
+        )}
       </div>
 
       <div className="card overflow-hidden">
@@ -102,27 +146,41 @@ export function PreciosFundicion() {
           <tbody className="divide-y divide-gray-100">
             {piezas.length === 0 ? (
               <tr><td colSpan={6} className="px-4 py-8 text-center text-xs text-gray-400">
-                No hay piezas con fórmula de fundición configurada
+                No hay piezas de fundición
               </td></tr>
             ) : piezas.map(p => {
-              const params = p.formula_params?.params as any
+              const cromado = getCromado(p)
               const nuevo = calcularNuevo(p)
+              const hasEdit = pesosPorId[p.id] !== undefined || cromadoPorId[p.id] !== undefined
+
               return (
-                <tr key={p.id} className="hover:bg-gray-50">
+                <tr key={p.id} className={`hover:bg-gray-50 ${hasEdit ? 'bg-yellow-50/30' : ''}`}>
                   <td className="px-4 py-2.5 font-mono text-xs text-gray-500">{p.codigo}</td>
                   <td className="px-4 py-2.5 text-gray-800">{p.nombre}</td>
-                  <td className="px-4 py-2.5 text-right text-gray-500 tabular-nums">{params?.peso_gramos ?? '—'}</td>
+                  <td className="px-4 py-2.5 text-right">
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      value={pesosPorId[p.id] ?? (p.formula_params?.tipo === 'fundicion' ? p.formula_params.peso_g : '')}
+                      placeholder="0"
+                      onChange={e => setPesosPorId(prev => ({ ...prev, [p.id]: e.target.value }))}
+                      className="input-field text-xs h-7 w-20 text-right ml-auto"
+                    />
+                  </td>
                   <td className="px-4 py-2.5 text-center">
-                    {params?.tiene_cromado
-                      ? <span className="badge-info text-[10px]">Sí</span>
-                      : <span className="text-gray-300 text-xs">No</span>
-                    }
+                    <input
+                      type="checkbox"
+                      checked={cromado}
+                      onChange={e => setCromadoPorId(prev => ({ ...prev, [p.id]: e.target.checked }))}
+                      className="w-3.5 h-3.5 accent-brand-500"
+                    />
                   </td>
                   <td className="px-4 py-2.5 text-right text-gray-500 tabular-nums">{formatPeso(p.precio_sin_iva)}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums">
                     {nuevo !== null
                       ? <span className="text-orange-600 font-medium">{formatPeso(nuevo)}</span>
-                      : <span className="text-gray-300">Sin fórmula</span>
+                      : <span className="text-gray-300 text-xs">Sin peso</span>
                     }
                   </td>
                 </tr>

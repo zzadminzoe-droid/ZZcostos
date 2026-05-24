@@ -81,6 +81,23 @@ export function useUpsertInsumo() {
   })
 }
 
+/** Actualiza campos sueltos de un insumo sin mostrar toast (útil para batch) */
+export function useUpdateInsumoFields() {
+  const qc = useQueryClient()
+  const sb = getSupabaseBrowser() as any
+
+  return useMutation({
+    mutationFn: async ({ id, ...fields }: { id: string; [key: string]: unknown }) => {
+      const { error } = await sb.from('insumos').update(fields).eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [KEY] })
+    },
+    onError: (e: Error) => toast.error(e.message),
+  })
+}
+
 export function useDeleteInsumo() {
   const qc = useQueryClient()
   const sb = getSupabaseBrowser() as any

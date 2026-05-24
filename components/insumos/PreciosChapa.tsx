@@ -17,20 +17,31 @@ export function PreciosChapa() {
   const [preciosChapa, setPreciosChapa] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
 
-  // Chapas madre (categoría CHAPAS, sin punto extra)
+  // Chapas madre: categoría CHAPAS con código de 2 segmentos (4.x)
   const chapasMadre = useMemo(() => {
     if (!insumos) return []
     return insumos
-      .filter(i => i.categoria?.nombre === 'CHAPAS' && !/\.\d+\./.test(i.codigo))
+      .filter(i => {
+        const segs = i.codigo.split('.')
+        return (
+          i.categoria?.nombre === 'CHAPAS' &&
+          segs.length === 2 &&
+          segs[0] === '4'
+        )
+      })
       .sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, { numeric: true }))
   }, [insumos])
 
+  // Hijos agrupados por código padre (usando prefijo — sin importar precio_base_ref)
   const hijosPorMadre = useMemo(() => {
     if (!insumos) return {}
     const map: Record<string, typeof insumos> = {}
     for (const chapa of chapasMadre) {
       map[chapa.codigo] = insumos
-        .filter(i => i.precio_base_ref === chapa.codigo && i.tipo_precio === 'calculado')
+        .filter(i =>
+          i.codigo.startsWith(chapa.codigo + '.') &&
+          i.codigo !== chapa.codigo
+        )
         .sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, { numeric: true }))
     }
     return map
@@ -40,11 +51,11 @@ export function PreciosChapa() {
     return parseFloat(preciosChapa[codigo] ?? '') || fallback
   }
 
-  function calcularNuevo(hijo: Insumo, precioChapa: number) {
-    const params = hijo.formula_params?.params as any
-    if (!params?.largo_mm) return null
+  function calcularNuevo(hijo: Insumo, precioChapa: number): number | null {
+    const fp = hijo.formula_params
+    if (!fp || fp.tipo !== 'chapa') return null
     return calcularPrecioChapa(
-      { largo_mm: params.largo_mm, alto_mm: params.alto_mm ?? 1, tiene_cromado: params.tiene_cromado ?? false },
+      { largo_mm: fp.largo_mm, alto_mm: fp.alto_mm, tiene_cromado: fp.cromado },
       precioChapa,
       parseFloat(precioCromado) || 0
     )
@@ -103,12 +114,18 @@ export function PreciosChapa() {
       {chapasMadre.map(chapa => {
         const precioChapa = getPrecioChapa(chapa.codigo, chapa.precio_sin_iva)
         const hijos = hijosPorMadre[chapa.codigo] ?? []
+        const conFormula = hijos.filter(h => h.formula_params?.tipo === 'chapa').length
         return (
           <div key={chapa.id} className="card overflow-hidden">
             <div className="px-4 py-3 bg-gray-50/80 border-b border-gray-100 flex items-center gap-4">
               <div>
                 <span className="font-mono text-xs text-gray-500 mr-2">{chapa.codigo}</span>
                 <span className="text-sm font-medium text-gray-800">{chapa.nombre}</span>
+                {hijos.length > 0 && conFormula < hijos.length && (
+                  <span className="ml-2 text-xs text-yellow-600">
+                    {hijos.length - conFormula} sin fórmula
+                  </span>
+                )}
               </div>
               <div className="ml-auto flex items-center gap-2">
                 <label className="text-xs text-gray-500">Precio chapa:</label>
@@ -127,6 +144,8 @@ export function PreciosChapa() {
                   <tr className="border-b border-gray-100">
                     <th className="text-left px-4 py-2 font-medium text-gray-500 text-xs">Código</th>
                     <th className="text-left px-4 py-2 font-medium text-gray-500 text-xs">Nombre</th>
+                    <th className="text-right px-4 py-2 font-medium text-gray-500 text-xs">Largo</th>
+                    <th className="text-right px-4 py-2 font-medium text-gray-500 text-xs">Alto</th>
                     <th className="text-center px-4 py-2 font-medium text-gray-500 text-xs">Cromado</th>
                     <th className="text-right px-4 py-2 font-medium text-gray-500 text-xs">Precio actual</th>
                     <th className="text-right px-4 py-2 font-medium text-gray-500 text-xs">Precio nuevo</th>
@@ -134,14 +153,22 @@ export function PreciosChapa() {
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {hijos.map(h => {
-                    const params = h.formula_params?.params as any
+                    const fp = h.formula_params?.tipo === 'chapa'
+                      ? (h.formula_params as Extract<typeof h.formula_params, { tipo: 'chapa' }>)
+                      : null
                     const nuevo = calcularNuevo(h, precioChapa)
                     return (
                       <tr key={h.id} className="hover:bg-gray-50">
                         <td className="px-4 py-2 font-mono text-xs text-gray-500">{h.codigo}</td>
                         <td className="px-4 py-2 text-gray-800">{h.nombre}</td>
+                        <td className="px-4 py-2 text-right text-gray-500 text-xs tabular-nums">
+                          {fp ? `${fp.largo_mm}mm` : <span className="text-gray-300">—</span>}
+                        </td>
+                        <td className="px-4 py-2 text-right text-gray-500 text-xs tabular-nums">
+                          {fp ? `${fp.alto_mm}mm` : <span className="text-gray-300">—</span>}
+                        </td>
                         <td className="px-4 py-2 text-center">
-                          {params?.tiene_cromado
+                          {fp?.cromado
                             ? <span className="badge-info text-[10px]">Sí</span>
                             : <span className="text-gray-300 text-xs">No</span>}
                         </td>
@@ -149,7 +176,7 @@ export function PreciosChapa() {
                         <td className="px-4 py-2 text-right tabular-nums">
                           {nuevo !== null
                             ? <span className="text-orange-600 font-medium">{formatPeso(nuevo)}</span>
-                            : <span className="text-gray-300">—</span>}
+                            : <span className="text-gray-300 text-xs">Sin fórmula</span>}
                         </td>
                       </tr>
                     )
@@ -157,7 +184,7 @@ export function PreciosChapa() {
                 </tbody>
               </table>
             ) : (
-              <p className="px-4 py-3 text-xs text-gray-400">Sin piezas con fórmula registradas</p>
+              <p className="px-4 py-3 text-xs text-gray-400">Sin piezas registradas</p>
             )}
           </div>
         )

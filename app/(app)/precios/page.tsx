@@ -7,13 +7,16 @@ import { useProductos, useFamilias } from '@/lib/hooks/useProductos'
 import { PageSpinner } from '@/components/ui/Spinner'
 import { formatPeso } from '@/lib/calculos'
 import { cn } from '@/lib/utils'
-import { Download, Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff } from 'lucide-react'
+import { BtnDescargarPDF } from '@/components/ui/BtnDescargarPDF'
+import { PDFPrecios } from '@/lib/pdf/pdf-precios'
 
 export default function PreciosPage() {
   const { data: productos, isLoading } = useProductos()
   const { data: familias } = useFamilias()
   const [familiaFilter, setFamiliaFilter] = useState('todas')
   const [modoCliente, setModoCliente] = useState(false)
+  const fecha = new Date().toLocaleDateString('es-AR')
 
   const conPrecio = useMemo(
     () => productos?.filter(p => p.precio_venta > 0) ?? [],
@@ -42,10 +45,21 @@ export default function PreciosPage() {
             {modoCliente ? <EyeOff size={13} /> : <Eye size={13} />}
             {modoCliente ? 'Modo cliente' : 'Modo interno'}
           </button>
-          <button className="btn-secondary text-xs">
-            <Download size={14} />
-            PDF
-          </button>
+          <BtnDescargarPDF
+            label="PDF"
+            filename={`ZZ-lista-precios-${fecha}.pdf`}
+            document={
+              <PDFPrecios
+                productos={(filtered as any[]).map(p => ({
+                  codigo: p.codigo,
+                  nombre: p.nombre,
+                  familia: p.familia?.nombre ?? '—',
+                  precio_venta: p.precio_venta,
+                }))}
+                fecha={fecha}
+              />
+            }
+          />
         </div>
       </div>
 

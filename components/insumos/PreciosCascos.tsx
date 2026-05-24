@@ -9,12 +9,12 @@ import { PageSpinner } from '@/components/ui/Spinner'
 import toast from 'react-hot-toast'
 
 const PLACA_CODIGO = '1.1'
+const EXCLUIR = ['1.1', '1.1.22', '1.1.23']
 
 export function PreciosCascos() {
   const { data: insumos, isLoading } = useInsumos()
   const updatePrecio = useUpdatePrecioInsumo()
 
-  // Placa base
   const placaBase = useMemo(
     () => insumos?.find(i => i.codigo === PLACA_CODIGO),
     [insumos]
@@ -25,27 +25,26 @@ export function PreciosCascos() {
   const [altoPlaca, setAltoPlaca] = useState('1600')
   const [saving, setSaving] = useState(false)
 
-  // Inicializar desde DB
   useMemo(() => {
     if (placaBase && !precioPlaca) {
       setPrecioPlaca(String(placaBase.precio_sin_iva))
     }
   }, [placaBase])
 
-  // Láminas (hijos de la placa)
+  // Láminas: código empieza con '1.1.' y no está excluido
+  // Funciona tanto antes (sin formula_params) como después del script
   const laminas = useMemo(() => {
     if (!insumos) return []
     return insumos
-      .filter(i => i.precio_base_ref === PLACA_CODIGO || i.codigo.startsWith('1.1.'))
-      .filter(i => i.tipo_precio === 'calculado' || i.formula_params)
+      .filter(i =>
+        i.codigo.startsWith('1.1.') &&
+        !EXCLUIR.includes(i.codigo) &&
+        (i.tipo_precio === 'calculado' || i.formula_params || !['1.1', '1.1.22', '1.1.23'].includes(i.codigo))
+      )
       .sort((a, b) => a.codigo.localeCompare(b.codigo, undefined, { numeric: true }))
   }, [insumos])
 
-  // Calcular precio de cada lámina en base al precio de placa actual
   const precioPlacaNum = parseFloat(precioPlaca) || 0
-  const anchoNum = parseFloat(anchoPlaca) || 2200
-  const altoNum = parseFloat(altoPlaca) || 1600
-  const areaPlaca = anchoNum * altoNum
 
   async function handleGuardar() {
     if (!placaBase || precioPlacaNum <= 0) {
@@ -54,18 +53,17 @@ export function PreciosCascos() {
     }
     setSaving(true)
     try {
-      // Actualizar precio de la placa base
       await updatePrecio.mutateAsync({ id: placaBase.id, precio: precioPlacaNum })
 
-      // Recalcular y actualizar todas las láminas que tienen formula_params
-      const laminasConFormula = laminas.filter(l => l.formula_params?.params)
+      // Solo recalcular láminas que tienen formula_params con tipo casco
+      const laminasConFormula = laminas.filter(l => l.formula_params?.tipo === 'casco')
       let actualizados = 0
 
       for (const lamina of laminasConFormula) {
-        const params = lamina.formula_params?.params as any
-        if (!params) continue
+        const fp = lamina.formula_params as Extract<typeof lamina.formula_params, { tipo: 'casco' }>
+        if (!fp) continue
         const nuevoPrecio = calcularPrecioCasco(
-          { alto_mm: params.alto_mm, largo_mm: params.largo_mm ?? 1600 },
+          { alto_mm: fp.alto_mm, largo_mm: fp.largo_mm },
           precioPlacaNum
         )
         await updatePrecio.mutateAsync({ id: lamina.id, precio: nuevoPrecio })
@@ -125,10 +123,15 @@ export function PreciosCascos() {
 
       {/* Tabla de láminas */}
       <div className="card overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-100">
+        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-gray-800">
             Láminas ({laminas.length})
           </h3>
+          {laminas.filter(l => !l.formula_params).length > 0 && (
+            <span className="text-xs text-yellow-600">
+              {laminas.filter(l => !l.formula_params).length} sin fórmula — correr fix-formula-params
+            </span>
+          )}
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -136,20 +139,20 @@ export function PreciosCascos() {
               <tr className="border-b border-gray-100 bg-gray-50/50">
                 <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs">Código</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-500 text-xs">Nombre</th>
+                <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs">Alto (mm)</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs">Precio actual</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-500 text-xs">Precio recalculado</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {laminas.map(l => {
-                const params = l.formula_params?.params as any
-                const precioRecalc = params
-                  ? calcularPrecioCasco(
-                      { alto_mm: params.alto_mm, largo_mm: params.largo_mm ?? 1600 },
-                      precioPlacaNum
-                    )
+                const fp = l.formula_params?.tipo === 'casco'
+                  ? (l.formula_params as Extract<typeof l.formula_params, { tipo: 'casco' }>)
                   : null
-                const cambio = precioRecalc && l.precio_sin_iva > 0
+                const precioRecalc = fp
+                  ? calcularPrecioCasco({ alto_mm: fp.alto_mm, largo_mm: fp.largo_mm }, precioPlacaNum)
+                  : null
+                const cambio = precioRecalc !== null && l.precio_sin_iva > 0
                   ? ((precioRecalc - l.precio_sin_iva) / l.precio_sin_iva) * 100
                   : null
 
@@ -157,12 +160,15 @@ export function PreciosCascos() {
                   <tr key={l.id} className="hover:bg-gray-50">
                     <td className="px-4 py-2.5 font-mono text-xs text-gray-500">{l.codigo}</td>
                     <td className="px-4 py-2.5 text-gray-800">{l.nombre}</td>
+                    <td className="px-4 py-2.5 text-right text-gray-500 tabular-nums text-xs">
+                      {fp ? fp.alto_mm : <span className="text-gray-300">—</span>}
+                    </td>
                     <td className="px-4 py-2.5 text-right text-gray-600 tabular-nums">
                       {formatPeso(l.precio_sin_iva)}
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums">
                       {precioRecalc !== null ? (
-                        <span className={cambio && Math.abs(cambio) > 0.5
+                        <span className={cambio !== null && Math.abs(cambio) > 0.5
                           ? 'text-orange-600 font-medium'
                           : 'text-gray-600'
                         }>
@@ -172,7 +178,7 @@ export function PreciosCascos() {
                           )}
                         </span>
                       ) : (
-                        <span className="text-gray-300">Sin fórmula</span>
+                        <span className="text-gray-300 text-xs">Sin fórmula</span>
                       )}
                     </td>
                   </tr>

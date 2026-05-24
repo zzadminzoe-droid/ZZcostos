@@ -1,5 +1,7 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import { useMemo } from 'react'
 import { useInsumos } from '@/lib/hooks/useInsumos'
 import { useProductos } from '@/lib/hooks/useProductos'

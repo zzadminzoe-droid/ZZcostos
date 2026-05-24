@@ -1,5 +1,7 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import { useState, useMemo } from 'react'
 import { useProductos, useFamilias } from '@/lib/hooks/useProductos'
 import { PageSpinner } from '@/components/ui/Spinner'

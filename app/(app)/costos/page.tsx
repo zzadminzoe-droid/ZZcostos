@@ -8,7 +8,7 @@ import { useProductosConCostos, useFamilias } from '@/lib/hooks/useProductos'
 import { formatPeso, formatPct } from '@/lib/calculos'
 import { PageSpinner } from '@/components/ui/Spinner'
 import { cn } from '@/lib/utils'
-import { Download, FileSpreadsheet, CheckCircle2, AlertTriangle, MinusCircle } from 'lucide-react'
+import { FileSpreadsheet, CheckCircle2, AlertTriangle, MinusCircle } from 'lucide-react'
 import { BtnDescargarPDF } from '@/components/ui/BtnDescargarPDF'
 
 export default function CostosPage() {
@@ -79,10 +79,8 @@ export default function CostosPage() {
           <BtnDescargarPDF
             label="PDF"
             filename={`ZZ-costos-${fecha}.pdf`}
-            buildDocument={async () => {
-              const { PDFCostos } = await import('@/lib/pdf/pdf-costos')
-              return <PDFCostos productos={pdfData} fecha={fecha} />
-            }}
+            pdfType="costos"
+            pdfData={{ productos: pdfData, fecha }}
           />
         </div>
       </div>

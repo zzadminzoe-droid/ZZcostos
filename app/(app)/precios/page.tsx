@@ -47,19 +47,15 @@ export default function PreciosPage() {
           <BtnDescargarPDF
             label="PDF"
             filename={`ZZ-lista-precios-${fecha}.pdf`}
-            buildDocument={async () => {
-              const { PDFPrecios } = await import('@/lib/pdf/pdf-precios')
-              return (
-                <PDFPrecios
-                  productos={(filtered as any[]).map(p => ({
-                    codigo: p.codigo,
-                    nombre: p.nombre,
-                    familia: p.familia?.nombre ?? '—',
-                    precio_venta: p.precio_venta,
-                  }))}
-                  fecha={fecha}
-                />
-              )
+            pdfType="precios"
+            pdfData={{
+              productos: (filtered as any[]).map(p => ({
+                codigo: p.codigo,
+                nombre: p.nombre,
+                familia: p.familia?.nombre ?? '—',
+                precio_venta: p.precio_venta,
+              })),
+              fecha,
             }}
           />
         </div>

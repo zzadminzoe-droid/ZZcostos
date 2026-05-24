@@ -4,53 +4,45 @@ import { useState } from 'react'
 import { Download, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { cn } from '@/lib/utils'
-import type React from 'react'
 
 interface Props {
   label?: string
   filename: string
   /**
-   * Factory async que importa dinámicamente el Document y lo construye.
-   * Se llama SOLO cuando el usuario hace click — nunca en SSR ni al cargar la página.
-   *
-   * Ejemplo:
-   *   buildDocument={async () => {
-   *     const { PDFCostos } = await import('@/lib/pdf/pdf-costos')
-   *     return <PDFCostos productos={data} fecha={fecha} />
-   *   }}
+   * PDF type for the API route ('precios' | 'costos' | 'bom')
    */
-  buildDocument: () => Promise<React.ReactElement>
+  pdfType: string
+  /**
+   * Data to send to the API route (props of the PDF component)
+   */
+  pdfData: Record<string, unknown>
   className?: string
 }
 
-export function BtnDescargarPDF({ label = 'PDF', filename, buildDocument, className }: Props) {
+export function BtnDescargarPDF({ label = 'PDF', filename, pdfType, pdfData, className }: Props) {
   const [loading, setLoading] = useState(false)
 
   const handleClick = async () => {
     setLoading(true)
     try {
-      const [{ pdf }, { saveAs }, doc] = await Promise.all([
-        import('@react-pdf/renderer'),
-        import('file-saver'),
-        buildDocument(),
-      ])
-
-      // React 18's reconciler schedules updateContainer async — we must wait
-      // for the 'change' event (fired on commit) before calling toBlob().
-      // This mirrors how usePDF hook works internally.
-      const instance = pdf()
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        instance.on('change', async () => {
-          try {
-            resolve(await instance.toBlob())
-          } catch (e) {
-            reject(e)
-          }
-        })
-        instance.updateContainer(doc)
+      const res = await fetch('/api/pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: pdfType, data: pdfData }),
       })
 
-      saveAs(blob, filename)
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }))
+        throw new Error(err.error ?? res.statusText)
+      }
+
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      a.click()
+      URL.revokeObjectURL(url)
     } catch (err) {
       console.error('Error generando PDF:', err)
       const msg = err instanceof Error ? err.message : String(err)

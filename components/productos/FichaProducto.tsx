@@ -3,7 +3,6 @@
 import { useState, useMemo, useRef } from 'react'
 import { ArrowLeft, Save, Loader2, Plus, Trash2, Check, X } from 'lucide-react'
 import { BtnDescargarPDF } from '@/components/ui/BtnDescargarPDF'
-import { PDFBom } from '@/lib/pdf/pdf-bom'
 import { useBomItems, useUpdateProducto, useAddBomItem, useUpdateBomItem, useDeleteBomItem } from '@/lib/hooks/useProductos'
 import { useInsumos } from '@/lib/hooks/useInsumos'
 import { calcularCostoProducto, calcularMargen, formatPeso, formatPct } from '@/lib/calculos'
@@ -131,28 +130,31 @@ export function FichaProducto({ producto, insumoMap, onBack }: Props) {
           label="Exportar BOM"
           filename={`ZZ-BOM-${producto.codigo}.pdf`}
           className="text-xs"
-          document={
-            <PDFBom
-              producto={{
-                codigo: producto.codigo,
-                nombre: producto.nombre,
-                familia: producto.familia?.nombre ?? '—',
-              }}
-              bom_items={(bomConPrecios as any[]).map(item => ({
-                codigo: item.insumo_codigo,
-                nombre: item.insumo_nombre,
-                cantidad: item.cantidad,
-                precio_unit: item.insumo?.precio_sin_iva ?? 0,
-                subtotal: (item.insumo?.precio_sin_iva ?? 0) * item.cantidad,
-              }))}
-              costo_sin_iva={costo.costo_sin_iva}
-              costo_con_iva={costo.costo_con_iva}
-              precio_venta={parseFloat(precioVenta) || undefined}
-              mano_de_obra={parseFloat(manoDeObra) || undefined}
-              gastos_fijos={parseFloat(gastosFijos) || undefined}
-              fecha={new Date().toLocaleDateString('es-AR')}
-            />
-          }
+          buildDocument={async () => {
+            const { PDFBom } = await import('@/lib/pdf/pdf-bom')
+            return (
+              <PDFBom
+                producto={{
+                  codigo: producto.codigo,
+                  nombre: producto.nombre,
+                  familia: producto.familia?.nombre ?? '—',
+                }}
+                bom_items={(bomConPrecios as any[]).map(item => ({
+                  codigo: item.insumo_codigo,
+                  nombre: item.insumo_nombre,
+                  cantidad: item.cantidad,
+                  precio_unit: item.insumo?.precio_sin_iva ?? 0,
+                  subtotal: (item.insumo?.precio_sin_iva ?? 0) * item.cantidad,
+                }))}
+                costo_sin_iva={costo.costo_sin_iva}
+                costo_con_iva={costo.costo_con_iva}
+                precio_venta={parseFloat(precioVenta) || undefined}
+                mano_de_obra={parseFloat(manoDeObra) || undefined}
+                gastos_fijos={parseFloat(gastosFijos) || undefined}
+                fecha={new Date().toLocaleDateString('es-AR')}
+              />
+            )
+          }}
         />
         <div>
           <div className="flex items-center gap-2">

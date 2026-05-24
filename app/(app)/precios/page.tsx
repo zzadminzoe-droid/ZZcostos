@@ -9,7 +9,6 @@ import { formatPeso } from '@/lib/calculos'
 import { cn } from '@/lib/utils'
 import { Eye, EyeOff } from 'lucide-react'
 import { BtnDescargarPDF } from '@/components/ui/BtnDescargarPDF'
-import { PDFPrecios } from '@/lib/pdf/pdf-precios'
 
 export default function PreciosPage() {
   const { data: productos, isLoading } = useProductos()
@@ -48,17 +47,20 @@ export default function PreciosPage() {
           <BtnDescargarPDF
             label="PDF"
             filename={`ZZ-lista-precios-${fecha}.pdf`}
-            document={
-              <PDFPrecios
-                productos={(filtered as any[]).map(p => ({
-                  codigo: p.codigo,
-                  nombre: p.nombre,
-                  familia: p.familia?.nombre ?? '—',
-                  precio_venta: p.precio_venta,
-                }))}
-                fecha={fecha}
-              />
-            }
+            buildDocument={async () => {
+              const { PDFPrecios } = await import('@/lib/pdf/pdf-precios')
+              return (
+                <PDFPrecios
+                  productos={(filtered as any[]).map(p => ({
+                    codigo: p.codigo,
+                    nombre: p.nombre,
+                    familia: p.familia?.nombre ?? '—',
+                    precio_venta: p.precio_venta,
+                  }))}
+                  fecha={fecha}
+                />
+              )
+            }}
           />
         </div>
       </div>

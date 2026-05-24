@@ -10,7 +10,6 @@ import { PageSpinner } from '@/components/ui/Spinner'
 import { cn } from '@/lib/utils'
 import { Download, FileSpreadsheet, CheckCircle2, AlertTriangle, MinusCircle } from 'lucide-react'
 import { BtnDescargarPDF } from '@/components/ui/BtnDescargarPDF'
-import { PDFCostos } from '@/lib/pdf/pdf-costos'
 
 export default function CostosPage() {
   const router = useRouter()
@@ -80,7 +79,10 @@ export default function CostosPage() {
           <BtnDescargarPDF
             label="PDF"
             filename={`ZZ-costos-${fecha}.pdf`}
-            document={<PDFCostos productos={pdfData} fecha={fecha} />}
+            buildDocument={async () => {
+              const { PDFCostos } = await import('@/lib/pdf/pdf-costos')
+              return <PDFCostos productos={pdfData} fecha={fecha} />
+            }}
           />
         </div>
       </div>
